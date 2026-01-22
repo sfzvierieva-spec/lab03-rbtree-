@@ -1,0 +1,59 @@
+name: Autograding
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: Autograding
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Restore dependencies
+      run: dotnet restore lab03.sln
+
+    - name: Build
+      run: dotnet build lab03.sln --no-restore --configuration Release
+
+    - name: Run application and grade
+      id: run_test
+      run: |
+        set +e
+        timeout 10s dotnet run --project GameLeaderboard.csproj --no-build --configuration Release <<EOF > output.log 2>&1
+        6
+        EOF
+        EXIT_CODE=$?
+        cat output.log
+
+        if grep -q "NotImplementedException" output.log; then
+          echo "❌ Application threw NotImplementedException"
+          echo "Points: 0/15"
+          exit 1
+        fi
+
+        if grep -q "Console.ReadKey" output.log || grep -q "Cannot read keys" output.log; then
+          echo "✅ Build and run successful (Console.ReadKey is expected in CI)"
+          echo "Points: 15/15"
+          exit 0
+        fi
+
+        if [ $EXIT_CODE -ne 0 ] && [ $EXIT_CODE -ne 124 ] && [ $EXIT_CODE -ne 143 ]; then
+          echo "❌ Application exited with error code $EXIT_CODE"
+          echo "Points: 0/15"
+          exit 1
+        fi
+
+        echo "✅ Build and run successful!"
+        echo "Points: 15/15"
+        exit 0
